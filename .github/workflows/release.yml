@@ -1,0 +1,80 @@
+name: Build & Release
+
+# Budowanie i wydanie wyłącznie po wypchnięciu tagu wersji (np. v1.2.3).
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Wersja
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Testy
+        run: cargo test --release
+
+      - name: Budowanie OpenFPS
+        env:
+          OPENFPS_VERSION: ${{ steps.ver.outputs.version }}
+        run: cargo build --release
+
+      - name: Pliki wydania
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item target/release/openfps.exe "out/OpenFPS-$v.exe"
+
+      - name: Podpis cyfrowy
+        shell: pwsh
+        env:
+          WIN_CERT: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WIN_CERT_PASS: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          # Tylko gdy w sekretach jest certyfikat: WINDOWS_CERTIFICATE (.pfx w base64) i WINDOWS_CERTIFICATE_PASSWORD.
+          if (-not $env:WIN_CERT) { exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WIN_CERT))
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /f $pfx /p $env:WIN_CERT_PASS /fd sha256 /tr http://timestamp.digicert.com /td sha256 /d "OpenFPS" (Get-ChildItem out/*.exe).FullName
+          if ($LASTEXITCODE -ne 0) { throw "Podpisywanie nie powiodło się" }
+          Remove-Item $pfx
+
+      - name: Sumy kontrolne
+        shell: pwsh
+        run: |
+          # Aktualizator w programie odrzuca plik bez zgodnej sumy SHA-256.
+          Get-FileHash out/*.exe -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content out/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenFPS-${{ steps.ver.outputs.version }}
+          path: out/*
+
+      - name: Publikacja wydania
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $notes = "**OpenFPS-$v.exe** – przenośny plik programu, bez instalatora; kolejne wersje program pobiera sam.`n`nPomysł i wykonanie: Adam Rędzikowski · [redzikowski.com](https://redzikowski.com) · [Postaw kawę](https://buycoffee.to/adamredzikowski)"
+          gh release create "${{ github.ref_name }}" out/* --title "OpenFPS $v" --notes $notes

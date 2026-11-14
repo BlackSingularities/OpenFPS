@@ -1,0 +1,22 @@
+{
+  "slug": "openfps",
+  "name": "OpenFPS",
+  "label": "nakładka FPS i metryk systemu",
+  "icon": "icon.png",
+  "url": "https://redzikowski.com/portfolio/openfps",
+  "posters": [
+    {
+      "platform": "windows",
+      "file": "windows.png",
+      "title": "Każda klatka *pod kontrolą*",
+      "lead": "Lekka nakładka FPS: czas klatki, 1% low, wykresy, CPU, GPU i pamięć — na jednym lub kilku ekranach, bez wstrzykiwania kodu do gier.",
+      "shots": [
+        { "src": "../screenshots/windows/01-szczegolowy.png", "caption": "Tryb szczegółowy" },
+        { "src": "../screenshots/windows/02-prosty.png", "caption": "Tryb prosty" },
+        { "src": "../screenshots/windows/03-ustawienia.png", "caption": "Ustawienia" }
+      ],
+      "features": ["bezpieczna dla anty-cheatów", "1% i 0.1% low", "wiele monitorów", "6 motywów", "skróty klawiszowe", "polski i angielski"],
+      "meta": "Windows 10 i 11"
+    }
+  ]
+}
